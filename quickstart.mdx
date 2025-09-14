@@ -1,80 +1,166 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Get Started"
+description: "Start tracing and testing agents with Judgeval"
+icon: "fast-forward"
 ---
 
-## Get started in three steps
+# Get Started
 
-Get your documentation site running locally and make your first customization.
+[judgeval](https://github.com/judgmentlabs/judgeval) is a post-building library for AI agents that
+comes with everything you need to trace and test your agents with evals.
 
-### Step 1: Set up your local environment
+judgeval is built and maintained by [Judgment Labs](https://judgmentlabs.ai).
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+## Get your free Judgment API keys
 
-### Step 2: Deploy your changes
+Head to the [Judgment Platform](https://app.judgmentlabs.ai) and create an account. Then, copy your API key and Organization ID into your environment variables.
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+```bash
+export JUDGMENT_API_KEY="your_key_here"
+export JUDGMENT_ORG_ID="your_org_id_here"
+```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
+<Card title="Get your free API keys" href="https://app.judgmentlabs.ai/register" icon="key" external>
+  You get 50,000 free trace spans and 1,000 free evals each month. No credit card required.
 </Card>
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+<Steps>
+  <Step>
+    ## Install Judgeval
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+    <Tabs items={['Python']}>
+      <Tab value="Python">
+        ```bash
+        pip install judgeval
+        ```
+      </Tab>
+    </Tabs>
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+    You can follow our latest updates via [GitHub](https://github.com/judgmentlabs/judgeval)! If you enjoy using Judgeval, consider giving us a star ⭐!
+  </Step>
 
-</CardGroup>
+  <Step>
+    ## Start Tracing with Judgeval
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+    Tracing starts with wrapping your LLM client with `wrap()` and observing your tools with `@judgment.observe`.
+
+    ```py title="trace.py"
+    from judgeval.tracer import Tracer, wrap
+    from openai import OpenAI
+
+    client = wrap(OpenAI())  # tracks all LLM calls
+    judgment = Tracer(project_name="default_project")
+
+    @judgment.observe(span_type="tool")
+    def format_question(question: str) -> str:
+        # dummy tool
+        return f"Question : {question}"
+
+    @judgment.observe(span_type="function")
+    def run_agent(prompt: str) -> str:
+        task = format_question(prompt)
+        response = client.chat_completions.create(
+            model="gpt-4.1",
+            messages=[{"role": "user", "content": task}]
+        )
+        return response.choices[0].message.content
+
+    run_agent("What is the capital of the United States?")
+    ```
+
+    <Callout type="info">Using LangGraph? Check out our [LangGraph quickstart](/documentation/tracing/integrations/langgraph) for more details.</Callout>
+
+    Congratulations! You've just created your first trace. It should look like this:
+
+    ![Image of a basic trace](/images/trace_ss.png)
+
+    <Callout type="tip">You can also run [online evals](/documentation/performance/online-evals) on production traces if you want to alert on specific events.</Callout>
+
+    To learn more about using `judgeval`'s tracing module, click [here](/documentation/tracing/introduction).
+  </Step>
+
+  <Step>
+    ## Start Testing with Judgeval
+
+    Judgeval enables you to use evals as unit tests in your CI pipelines.
+
+    <Callout type="info">
+      You can run evals on predefined test examples with any of the [built-in scorers](/documentation/evaluation/scorers/introduction) or your own [custom scorers](/documentation/evaluation/scorers/custom-scorers).
+      Evals produce a score for each example and you can run multiple scorers on the same examples.
+    </Callout>
+
+    ```py title="eval.py"
+    from judgeval import JudgmentClient
+    from judgeval.data import Example
+    from judgeval.scorers import FaithfulnessScorer
+
+    client = JudgmentClient()
+
+    task = "What is the capital of the United States?"
+    example = Example(
+        input=task,
+        actual_output=run_agent(task),  # e.g. "The capital of the U.S. is Washington, D.C."
+        retrieval_context=["Washington D.C. was founded in 1790 and became the capital of the U.S."],
+    )
+
+    scorer = FaithfulnessScorer(threshold=0.5)
+    client.assert_test(
+        examples=[example],
+        scorers=[scorer],
+        model="gpt-4.1",
+    )
+    ```
+
+    Your test should have passed! Let's break down what happened.
+
+    * `input` and `actual_output` represent what your agent system begins with and returns.
+    * `retrieval_context` represents the retrieved context from your knowledge sources.
+    * `FaithfulnessScorer(threshold=0.5)` checks if the output is hallucinated relative to the retrieved context.
+      Thresholds are used in the context of [unit testing](/documentation/evaluation/unit-testing).
+    * We chose `gpt-4.1` as our judge model to measure faithfulness. Judgment Labs offers ANY judge model for your evaluation needs.
+
+    <Callout type="tip">
+      If this test case failed (try changing it yourself!), an exception would be raised.
+    </Callout>
+  </Step>
+</Steps>
+
+## Next Steps
+
+Congratulations! You've just finished getting started with `judgeval` and the Judgment Platform.
+
+For a deeper dive into using `judgeval`, learn more about our offerings!
+
+<Columns cols={2}>
+  <Card
+    title="Tracing"
+    href="/documentation/tracing/introduction"
+    icon="code"
+  >
+    Observe your agent's inputs/outputs, tool calls, and LLM calls to debug your agent runs.
+  </Card>
+
+  <Card
+    title="Unit Testing"
+    href="/documentation/evaluation/unit-testing"
+    icon="check"
+  >
+    Test your agent against predefined examples to catch regressions before they reach production.
+  </Card>
+
+  <Card
+    title="Evaluation"
+    href="/documentation/evaluation/introduction"
+    icon="chart-line"
+  >
+    Measure and optimize your agent along any quality metric, from hallucinations to tool-calling accuracy.
+  </Card>
+
+  <Card
+    title="Datasets"
+    href="/documentation/evaluation/dataset"
+    icon="database"
+  >
+    Construct datasets from your agent interactions to test and evaluate your agent's performance.
+  </Card>
+</Columns>
