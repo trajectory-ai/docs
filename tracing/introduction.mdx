@@ -1,0 +1,104 @@
+---
+title: "Tracing"
+description: "Trace your agents, tools, and LLM calls using trajectory"
+icon: "code"
+---
+
+# Tracing
+
+`trajectory` lets you trace functions, tools, and LLM calls with minimal changes to your codebase.
+
+## Create a Tracer
+
+```py title="tracer.py"
+import os
+from trajectory import Tracer, wrap
+from openai import OpenAI
+
+tracer = Tracer(
+    api_key=os.getenv("TRAJECTORY_API_KEY") or os.getenv("JUDGMENT_API_KEY"),
+    organization_id=os.getenv("TRAJECTORY_ORGANIZATION_ID") or os.getenv("JUDGMENT_ORGANIZATION_ID"),
+    project_name="my_project",
+    enable_monitoring=True,
+    enable_evaluations=False,
+    trace_across_async_contexts=True,  # set True for async frameworks like FastAPI
+)
+
+# Optional: wrap your LLM client to automatically trace API calls
+client = wrap(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
+```
+
+## Trace tools and functions
+
+Use `@tracer.observe(span_type="...")` to trace any callable. Mark tools with `span_type="tool"` and business logic with `span_type="function"`.
+
+```py title="tools.py"
+from trajectory import Tracer
+
+tracer = Tracer(project_name="tools_demo")
+
+@tracer.observe(span_type="tool")
+def get_current_time() -> str:
+    from datetime import datetime
+    return datetime.utcnow().isoformat() + "Z"
+
+@tracer.observe(span_type="tool")
+def add_numbers(a: float, b: float) -> float:
+    return a + b
+
+@tracer.observe(span_type="function")
+def format_question(q: str) -> str:
+    return f"Question: {q}"
+```
+
+## Create spans and log data
+
+Use `tracer.trace(name)` to open a span. You can record inputs/outputs and log custom metrics.
+
+```py title="trace_and_log.py"
+from trajectory import Tracer
+tracer = Tracer(project_name="span_demo")
+
+with tracer.trace("answer_user_question") as trace:
+    # Record inputs and outputs on the current span
+    trace.record_input({"question": "What is the capital of the United States?"})
+    answer = "Washington, D.C."
+    trace.record_output(answer)
+
+    # Log metrics (appear under the trace's metadata)
+    tracer.log_metric(
+        "answer_length",
+        value=len(answer),
+        unit="chars",
+        tags=["qa"],
+        properties={"topic": "geography"},
+        persist=True,
+    )
+
+    # Optionally force-save the trace state
+    trace.save(final_save=True)
+```
+
+<Callout type="info">
+Spans are nested automatically when you call traced functions inside another traced context. Tool spans are marked with `span_type="tool"`, and LLM calls are auto-traced when using `wrap(...)`.
+</Callout>
+
+## Examples
+
+<Card
+  title="FastAPI Integration"
+  icon="bolt"
+  href="/tracing/fastapi"
+  horizontal
+>
+  Instrument a FastAPI chatbot with trajectory tracing.
+</Card>
+
+<Card
+  title="LangGraph Integration"
+  icon="workflow"
+  href="/tracing/langgraph"
+  horizontal
+>
+  Trace LangGraph nodes and runs using JudgevalCallbackHandler.
+</Card>

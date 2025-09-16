@@ -1,0 +1,86 @@
+---
+title: "Conversations"
+description: "Track multi‑turn chats and attribute spans to a conversation and end‑user"
+icon: "comments"
+---
+
+# Conversations
+
+Use `tracer.conversation(conversation_id, user_id=...)` to group spans across multiple turns of a chat into a single conversation context. All nested spans inherit the `conversation_id` (and optional `user_id`) so you can analyze end‑to‑end sessions.
+
+## Start a conversation
+
+```py title="conversation_basic.py"
+import os
+from trajectory import Tracer
+
+tracer = Tracer(
+    api_key=os.getenv("TRAJECTORY_API_KEY") or os.getenv("JUDGMENT_API_KEY"),
+    organization_id=os.getenv("TRAJECTORY_ORGANIZATION_ID") or os.getenv("JUDGMENT_ORGANIZATION_ID"),
+    project_name="conversation_demo",
+    enable_monitoring=True,
+    enable_evaluations=False,
+)
+
+conversation_id = "conv_123"
+end_user_id = "user_42"
+
+with tracer.conversation(conversation_id, user_id=end_user_id):
+    with tracer.trace("greet_user") as trace:
+        trace.record_input({"message": "Hello!"})
+        reply = "Hi there 👋"
+        trace.record_output(reply)
+
+        tracer.log_metric("greeting_chars", value=len(reply), unit="chars", tags=["chat"], persist=True)
+
+    # Any traced function/tool called here will be associated with this conversation
+```
+
+## Multi‑turn conversations
+
+Re‑use the same `conversation_id` across turns to stitch a session together.
+
+```py title="multi_turn.py"
+from trajectory import Tracer
+tracer = Tracer(project_name="conversation_demo")
+
+@tracer.observe(span_type="function")
+def run_agent(message: str) -> str:
+    # your agent logic here
+    return f"Echo: {message}"
+
+conv_id = "conv_abc"
+
+with tracer.conversation(conv_id, user_id="user_42"):
+    a1 = run_agent("What's the weather in Paris?")
+    a2 = run_agent("What are the top attractions?")
+    a3 = run_agent("Calculate 15 * 3")
+```
+
+## Track state and I/O on spans
+
+```py title="state_and_io.py"
+with tracer.conversation("conv_789", user_id="user_99"):
+    with tracer.trace("tool_execution") as trace:
+        trace.record_state_before({"tool": "search", "stage": "pre"})
+        trace.record_input({"query": "best restaurants in SF"})
+
+        result = ["Restaurant A", "Restaurant B"]
+
+        trace.record_output(result)
+        trace.record_state_after({"tool": "search", "stage": "post", "results": len(result)})
+```
+
+<Callout type="info">
+- In async frameworks, set `trace_across_async_contexts=True` on your `Tracer` and on `wrap(...)` for LLM clients so conversation context flows across await points.
+- To see a complete server example, check the FastAPI guide.
+</Callout>
+
+<Card
+  title="FastAPI Integration"
+  icon="bolt"
+  href="/tracing/fastapi"
+  horizontal
+>
+  See a full multi‑turn chatbot with conversations, tools, and LLM calls.
+</Card>

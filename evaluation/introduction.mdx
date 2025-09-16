@@ -1,0 +1,120 @@
+---
+title: "Evaluations"
+description: "Use trajectory to evaluate agent quality with examples and scorers"
+icon: "check"
+---
+
+# Evaluations
+
+Validate your agent’s outputs against expectations using `trajectory` examples and scorers. You can run evals inline during traces or as part of CI.
+
+## Define examples
+
+Use `Example` to describe inputs, expected outputs, retrieval context, and expected tools.
+
+```py title="example.py"
+from trajectory.data import Example
+
+example = Example(
+  input="What's the weather in Tokyo and calculate 15 * 3?",
+  expected_output="Tokyo weather ... Calculation: 15 * 3 = 45",
+  retrieval_context=["Tokyo weather should be reasonable and include basic fields"],
+  expected_tools=[
+    {"tool_name": "get_weather", "parameters": {"city": "Tokyo"}},
+    {"tool_name": "calculate", "parameters": {"expression": "15 * 3"}},
+  ],
+)
+```
+
+## Choose scorers
+
+Scorers judge different aspects (faithfulness to context, answer relevancy, tool-calling order, etc.).
+
+```py title="scorers.py"
+from trajectory.scorers import FaithfulnessScorer, AnswerRelevancyScorer
+# Optional trajectory-level scorers
+from trajectory.scorers.trajectory_scorers import ToolCallOrderScorer
+
+faithful = FaithfulnessScorer(threshold=0.5)
+relevant = AnswerRelevancyScorer(threshold=0.5)
+tool_order = ToolCallOrderScorer(mode="ordering_match")  # validates tool call sequence
+```
+
+## Run evals inline during tracing
+
+Call `tracer.async_evaluate(...)` within observed functions or inside a `with tracer.trace(...):` block to attach results to the current span.
+
+```py title="inline_eval.py"
+from trajectory import Tracer
+from trajectory.data import Example
+from trajectory.scorers import FaithfulnessScorer
+
+tracer = Tracer(project_name="eval_demo", enable_monitoring=True, enable_evaluations=True)
+
+@tracer.observe(span_type="function")
+def run_agent(task: str) -> str:
+  # ... your agent logic to produce answer ...
+  answer = "Washington, D.C."
+
+  ex = Example(
+    input=task,
+    actual_output=answer,
+    retrieval_context=["Washington D.C. is the capital of the U.S."],
+  )
+
+  tracer.async_evaluate(
+    scorers=[FaithfulnessScorer(threshold=0.5)],
+    example=ex,
+    model="gpt-4.1-mini",
+  )
+  return answer
+```
+
+You can also associate an eval to a specific span by passing `span_id` if you manage spans manually.
+
+## Batch or CI-style usage
+
+Wrap your agent function and evaluate across a suite of examples. Keep each `Example` focused on a single behavior.
+
+```py title="ci_suite.py"
+from trajectory import Tracer
+from trajectory.data import Example
+from trajectory.scorers import FaithfulnessScorer, AnswerRelevancyScorer
+
+tracer = Tracer(project_name="ci_suite", enable_monitoring=True, enable_evaluations=True)
+
+EXAMPLES = [
+  Example(
+    input="What's the weather in Paris?",
+    expected_output="...weather answer...",
+    retrieval_context=["Weather info includes temperature, condition"],
+  ),
+  Example(
+    input="Calculate 15 * 3",
+    expected_output="45",
+  ),
+]
+
+def eval_suite(run_fn):
+  for ex in EXAMPLES:
+    with tracer.trace("eval_case") as trace:
+      output = run_fn(ex.input)
+      # if you don’t supply example.expected_output, pass actual_output explicitly
+      tracer.async_evaluate(
+        scorers=[FaithfulnessScorer(threshold=0.5), AnswerRelevancyScorer(threshold=0.5)],
+        example=Example(
+          input=ex.input,
+          actual_output=output,
+          expected_output=getattr(ex, "expected_output", None),
+          retrieval_context=getattr(ex, "retrieval_context", None),
+        ),
+        model="gpt-4.1-mini",
+      )
+      trace.save(final_save=True)
+```
+
+<Callout type="tip">
+- Keep thresholds conservative at first (e.g., 0.5) and tune after inspecting failures.
+- Use trajectory-level scorers like `ToolCallOrderScorer` when validating multi-tool agent behavior.
+- Persist traces in CI to inspect failures in your dashboard.
+</Callout>

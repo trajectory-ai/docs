@@ -1,0 +1,97 @@
+---
+title: "User Metrics"
+description: "Log custom metrics per trace and attribute them to specific users"
+icon: "chart-line"
+---
+
+# User Metrics
+
+Use `tracer.log_metric(...)` to record lightweight, structured telemetry on the current trace. Metrics are attached to the active span/trace and can be filtered by conversation or user.
+
+## Log metrics
+
+```py title="basic_metrics.py"
+from trajectory import Tracer
+
+tracer = Tracer(project_name="metrics_demo")
+
+with tracer.trace("generate_answer") as trace:
+  answer = "Washington, D.C."
+  tracer.log_metric(
+    "answer_length",
+    value=len(answer),
+    unit="chars",
+    tags=["qa"],
+    properties={"topic": "geography"},
+    persist=True,  # set True to persist on the trace
+  )
+
+  trace.save(final_save=True)
+```
+
+## Attribute to conversations and users
+
+Wrap your operations in a conversation context to consistently associate metrics with a conversation and a specific user. The `user_id` should be your application’s stable identifier (for example, `request.user.id`).
+
+```py title="attribute_to_user.py"
+from trajectory import Tracer
+tracer = Tracer(project_name="metrics_demo")
+
+conversation_id = "conv_123"
+end_user_id = str(request.user.id)  # use your own user tracking ID
+
+with tracer.conversation(conversation_id, user_id=end_user_id):
+  with tracer.trace("chat_request") as trace:
+    user_msg = "What is the capital of the United States?"
+    # Record custom metrics for analytics/alerting
+    tracer.log_metric("chat_user_message", value=len(user_msg), unit="chars", tags=["chat"], persist=True)
+
+    answer = "Washington, D.C."
+    tracer.log_metric("chat_assistant_message", value=len(answer), unit="chars", tags=["chat"], persist=True)
+
+    trace.save(final_save=True)
+```
+
+<Callout type="info">
+- Use a stable `user_id` (e.g., `request.user.id`) to attribute metrics and traces to real users of your agent.
+- In async apps (e.g., FastAPI), set `trace_across_async_contexts=True` on your `Tracer` and on `wrap(...)` so conversation context (and thus user attribution) propagates correctly.
+</Callout>
+
+## Example: FastAPI (metrics only excerpt)
+
+```py title="fastapi_metrics.py"
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import Optional
+from uuid import uuid4
+from trajectory import Tracer
+
+tracer = Tracer(project_name="fastapi_chatbot_project", trace_across_async_contexts=True)
+
+class ChatRequest(BaseModel):
+  message: str
+  conversation_id: Optional[str] = None
+
+app = FastAPI()
+
+@app.post("/chat")
+def chat(req: ChatRequest):
+  conv_id = req.conversation_id or str(uuid4())
+  user_id = str(request.user.id)  # or any stable user identifier in your system
+
+  with tracer.conversation(conv_id, user_id=user_id):
+    with tracer.trace("chat_request") as trace:
+      tracer.log_metric("chat_user_message", value=len(req.message), unit="chars", tags=["chat"], persist=True)
+      # ... produce answer ...
+      answer = "Washington, D.C."
+      tracer.log_metric("chat_assistant_message", value=len(answer), unit="chars", tags=["chat"], persist=True)
+      trace.save(final_save=True)
+      return {"response": answer, "conversation_id": conv_id}
+```
+
+## Best practices
+
+- Name metrics clearly: e.g., `tool_latency_ms`, `retrieval_hits`, `tokens_prompt`.
+- Keep value types numeric; use `tags` and `properties` for context.
+- Avoid high-cardinality tag values (e.g., entire prompts) to keep analytics fast.
+- Log only what you’ll monitor or analyze later (alerting, funnels, cohort analysis).

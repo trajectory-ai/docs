@@ -1,0 +1,143 @@
+---
+title: "FastAPI Integration"
+description: "Instrument a FastAPI chatbot with trajectory tracing"
+icon: "bolt"
+---
+
+# FastAPI Integration
+
+Integrate `trajectory` with FastAPI to trace requests, tools, and LLM calls.
+
+<Steps>
+  <Step>
+    ## 1) Install and set environment
+
+    ```bash
+    pip install trajectory openai fastapi uvicorn python-dotenv
+    ```
+
+    ```bash
+    export OPENAI_API_KEY="your_openai_key"
+    export TRAJECTORY_API_KEY="your_trajectory_key"
+    export TRAJECTORY_ORGANIZATION_ID="your_org_id"
+    ```
+  </Step>
+
+  <Step>
+    ## 2) Minimal chatbot with tracing
+
+    ```py title="fastapi_chatbot.py"
+    from fastapi import FastAPI, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
+    from pydantic import BaseModel
+    from typing import Optional
+    import os
+    from uuid import uuid4
+    from trajectory import Tracer, wrap
+    from openai import OpenAI
+
+    # Tracer (enable async context propagation for FastAPI)
+    tracer = Tracer(
+        api_key=os.getenv("TRAJECTORY_API_KEY"),
+        organization_id=os.getenv("TRAJECTORY_ORGANIZATION_ID"),
+        project_name="fastapi_chatbot_project",
+        enable_monitoring=True,
+        enable_evaluations=False,
+        trace_across_async_contexts=True,
+    )
+
+    # Auto-traced OpenAI client
+    client = wrap(OpenAI(api_key=os.getenv("OPENAI_API_KEY")), trace_across_async_contexts=True)
+
+    app = FastAPI(title="Simple LLM Chatbot with Tracing")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # -------- Tools (traced) --------
+    @tracer.observe(span_type="tool")
+    def get_current_time() -> str:
+        from datetime import datetime
+        return datetime.utcnow().isoformat() + "Z"
+
+    @tracer.observe(span_type="tool")
+    def add_numbers(a: float, b: float) -> float:
+        return a + b
+
+    @tracer.observe(span_type="tool")
+    def format_question(q: str) -> str:
+        return f"Question: {q}"
+
+    # -------- Request model --------
+    class ChatRequest(BaseModel):
+        message: str
+        conversation_id: Optional[str] = None
+
+    # -------- Endpoint --------
+    @app.post("/chat")
+    def chat(request: ChatRequest):
+        try:
+            conversation_id = request.conversation_id or str(uuid4())
+            user_id = str(uuid4())
+
+            # Attach conversation + end-user context to all nested spans
+            with tracer.conversation(conversation_id, user_id=user_id):
+                with tracer.trace("chat_request") as trace:
+                    trace.record_input({"message": request.message})
+
+                    task = format_question(request.message)
+
+                    # Auto-traced LLM call
+                    resp = client.chat.completions.create(
+                        model="gpt-4.1-mini",
+                        messages=[{"role": "user", "content": task}],
+                        max_tokens=200,
+                    )
+                    answer = resp.choices[0].message.content
+                    trace.record_output(answer)
+
+                    # Log metrics onto the current trace
+                    tracer.log_metric("chat_user_message", value=len(request.message), unit="chars", tags=["chat"], persist=True)
+                    tracer.log_metric("chat_assistant_message", value=len(answer), unit="chars", tags=["chat"], persist=True)
+
+                    trace.save(final_save=True)
+                    return {"response": answer, "conversation_id": conversation_id}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    ```
+  </Step>
+
+  <Step>
+    ## 3) Run locally
+
+    ```bash
+    uvicorn fastapi_chatbot:app --reload --host 0.0.0.0 --port 8001
+    ```
+
+    Test:
+    ```bash
+    curl -X POST http://localhost:8001/chat \
+      -H "Content-Type: application/json" \
+      -d '{"message":"What is the capital of the United States?"}'
+    ```
+  </Step>
+</Steps>
+
+## How tracing works with trajectory
+
+- **Create a tracer**: `tracer = Tracer(project_name="...")`
+- **Trace tools/functions**: Decorate with `@tracer.observe(span_type="tool" | "function")`
+- **Open spans**: `with tracer.trace("name") as trace: ...`
+- **Record I/O**: `trace.record_input({...})`, `trace.record_output(result)`
+- **Log metrics**: `tracer.log_metric(name, value=..., unit="...", tags=[...], properties={...}, persist=True)`
+- **Propagate context (FastAPI/async)**: set `trace_across_async_contexts=True` on the `Tracer` and on `wrap(...)`
+- **Trace LLM calls**: Wrap your client once with `wrap(OpenAI(...))` and call as usual
+
+<Callout type="tip">
+For agent tool debugging, add `trace.record_state_before(state)` and `trace.record_state_after(state)` around tool calls to capture state transitions.
+</Callout>

@@ -1,0 +1,54 @@
+---
+title: "LangGraph Integration"
+description: "Trace LangGraph runs using trajectory with JudgevalCallbackHandler"
+icon: "workflow"
+---
+
+# LangGraph Integration
+
+Instrument LangGraph graphs with `trajectory` by attaching `JudgevalCallbackHandler` so each step emits spans to your tracer.
+
+## Minimal example
+
+```py title="langgraph_integration.py"
+from typing import TypedDict, List
+from langgraph.graph import StateGraph, START, END
+from langchain_core.messages import HumanMessage, AIMessage
+from trajectory import Tracer
+from trajectory.integrations.langgraph import JudgevalCallbackHandler  # callback hook
+
+class ChatState(TypedDict):
+  messages: List
+
+# A simple node that responds to the last user message
+def responder(state: ChatState) -> ChatState:
+  history = state.get("messages", [])
+  user_text = history[-1].content if history else "Hello!"
+  reply = f"Echo: {user_text}"
+  return {"messages": history + [AIMessage(content=reply)]}
+
+# Build a tiny graph
+wf = StateGraph(ChatState)
+wf.add_node("responder", responder)
+wf.add_edge(START, "responder")
+wf.add_edge("responder", END)
+graph = wf.compile()
+
+# trajectory tracer + LangGraph callback
+tracer = Tracer(project_name="langgraph_demo", enable_monitoring=True, enable_evaluations=False)
+cb = JudgevalCallbackHandler(tracer)
+
+# Run with callbacks so steps get traced
+initial = {"messages": [HumanMessage(content="Hi there!")]}
+run_config = {
+  "callbacks": [cb],
+  "configurable": {"thread_id": "demo_thread_1"}  # optional thread id for grouping
+}
+result = graph.invoke(initial, config=run_config)
+print(result["messages"][-1].content)
+```
+
+<Callout type="tip">
+- Attach `JudgevalCallbackHandler(tracer)` via `config={"callbacks":[... ]}` to trace each node execution.
+- Use `configurable.thread_id` to group runs (helpful for session-level analysis).
+</Callout>
