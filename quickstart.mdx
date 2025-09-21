@@ -1,15 +1,15 @@
 ---
 title: "Get Started"
-description: "Start tracing and testing agents with Judgeval"
+description: "Start tracing and testing agents with trajectory"
 icon: "fast-forward"
 ---
 
 # Get Started
 
-[judgeval](https://github.com/judgmentlabs/judgeval) is a post-building library for AI agents that
-comes with everything you need to trace and test your agents with evals.
+[trajectory](https://trajectoryevals.com) is a SDK that helps you with everything post-building, from tracing to
+capu
 
-judgeval is built and maintained by [Judgment Labs](https://judgmentlabs.ai).
+trajectory is built and maintained by [trajectory.ai](https://trajectoryevals.com).
 
 ## Get your free Judgment API keys
 
@@ -26,26 +26,26 @@ export JUDGMENT_ORG_ID="your_org_id_here"
 
 <Steps>
   <Step>
-    ## Install Judgeval
+    ## Install trajectory
 
     <Tabs items={['Python']}>
       <Tab value="Python">
         ```bash
-        pip install judgeval
+        pip install trajectory
         ```
       </Tab>
     </Tabs>
 
-    You can follow our latest updates via [GitHub](https://github.com/judgmentlabs/judgeval)! If you enjoy using Judgeval, consider giving us a star ⭐!
+    You can follow our latest updates via [GitHub](https://github.com/judgmentlabs/judgeval)! If you enjoy using trajectory, consider giving us a star ⭐!
   </Step>
 
   <Step>
-    ## Start Tracing with Judgeval
+    ## Start Tracing with trajectory
 
     Tracing starts with wrapping your LLM client with `wrap()` and observing your tools with `@judgment.observe`.
 
     ```py title="trace.py"
-    from judgeval.tracer import Tracer, wrap
+    from trajectory import Tracer, wrap
     from openai import OpenAI
 
     client = wrap(OpenAI())  # tracks all LLM calls
@@ -76,13 +76,13 @@ export JUDGMENT_ORG_ID="your_org_id_here"
 
     <Callout type="tip">You can also run [online evals](/documentation/performance/online-evals) on production traces if you want to alert on specific events.</Callout>
 
-    To learn more about using `judgeval`'s tracing module, click [here](/documentation/tracing/introduction).
+    To learn more about using `trajectory`'s tracing module, click [here](/documentation/tracing/introduction).
   </Step>
 
   <Step>
-    ## Start Testing with Judgeval
+    ## Start Testing with trajectory
 
-    Judgeval enables you to use evals as unit tests in your CI pipelines.
+    trajectory enables you to use evals as unit tests in your CI pipelines.
 
     <Callout type="info">
       You can run evals on predefined test examples with any of the [built-in scorers](/documentation/evaluation/scorers/introduction) or your own [custom scorers](/documentation/evaluation/scorers/custom-scorers).
@@ -90,9 +90,9 @@ export JUDGMENT_ORG_ID="your_org_id_here"
     </Callout>
 
     ```py title="eval.py"
-    from judgeval import JudgmentClient
-    from judgeval.data import Example
-    from judgeval.scorers import FaithfulnessScorer
+    from trajectory import JudgmentClient
+    from trajectory.data import Example
+    from trajectory.scorers import FaithfulnessScorer
 
     client = JudgmentClient()
 
@@ -127,9 +127,9 @@ export JUDGMENT_ORG_ID="your_org_id_here"
 
 ## Next Steps
 
-Congratulations! You've just finished getting started with `judgeval` and the Judgment Platform.
+Congratulations! You've just finished getting started with `trajectory` and the Judgment Platform.
 
-For a deeper dive into using `judgeval`, learn more about our offerings!
+For a deeper dive into using `trajectory`, learn more about our offerings!
 
 <Columns cols={2}>
   <Card
