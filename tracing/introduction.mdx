@@ -16,15 +16,10 @@ from trajectory import Tracer, wrap
 from openai import OpenAI
 
 tracer = Tracer(
-    api_key=os.getenv("TRAJECTORY_API_KEY") or os.getenv("JUDGMENT_API_KEY"),
-    organization_id=os.getenv("TRAJECTORY_ORGANIZATION_ID") or os.getenv("JUDGMENT_ORGANIZATION_ID"),
-    project_name="my_project",
-    enable_monitoring=True,
-    enable_evaluations=False,
-    trace_across_async_contexts=True,  # set True for async frameworks like FastAPI
+    api_key=os.getenv("TRAJECTORY_API_KEY") or os.getenv("JUDGMENT_API_KEY"),    
 )
 
-# Optional: wrap your LLM client to automatically trace API calls
+#Wrap your LLM client to be able to automatically track API calls
 client = wrap(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 ```
 
@@ -53,35 +48,10 @@ def format_question(q: str) -> str:
 
 ## Create spans and log data
 
-Use `tracer.trace(name)` to open a span. You can record inputs/outputs and log custom metrics.
+You will automatically create spans and can view it on your dashboard in the 'traces' section. 
 
-```py title="trace_and_log.py"
-from trajectory import Tracer
-tracer = Tracer(project_name="span_demo")
-
-with tracer.trace("answer_user_question") as trace:
-    # Record inputs and outputs on the current span
-    trace.record_input({"question": "What is the capital of the United States?"})
-    answer = "Washington, D.C."
-    trace.record_output(answer)
-
-    # Log metrics (appear under the trace's metadata)
-    tracer.log_metric(
-        "answer_length",
-        value=len(answer),
-        unit="chars",
-        tags=["qa"],
-        properties={"topic": "geography"},
-        persist=True,
-    )
-
-    # Optionally force-save the trace state
-    trace.save(final_save=True)
-```
-
-<Callout type="info">
-Spans are nested automatically when you call traced functions inside another traced context. Tool spans are marked with `span_type="tool"`, and LLM calls are auto-traced when using `wrap(...)`.
-</Callout>
+If you are using async contexts like FastAPI check out the section on it's integration. 
+The integration is slightly different. 
 
 ## Examples
 

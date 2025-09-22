@@ -6,23 +6,23 @@ icon: "fast-forward"
 
 # Get Started
 
-[trajectory](https://trajectoryevals.com) is a SDK that helps you with everything post-building, from tracing to
-capu
+[trajectory](https://trajectoryevals.com) is a SDK that helps you with everything post-building. You can use it to trace, 
+capture user metrics, create custom monitors and run evaluations on your agents. 
+We are working on getting the feature of dataset creation very very soon. 
+
 
 trajectory is built and maintained by [trajectory.ai](https://trajectoryevals.com).
 
-## Get your free Judgment API keys
+## Get your free trajectory API keys
 
-Head to the [Judgment Platform](https://app.judgmentlabs.ai) and create an account. Then, copy your API key and Organization ID into your environment variables.
+Head to the [trajectory](https://trajectoryevals.com/dashboard) and create an account.
+ Then, copy your API key into your environment variables. 
 
 ```bash
-export JUDGMENT_API_KEY="your_key_here"
-export JUDGMENT_ORG_ID="your_org_id_here"
+export TRAJECTORY_API_KEY="your_key_here"
 ```
 
-<Card title="Get your free API keys" href="https://app.judgmentlabs.ai/register" icon="key" external>
-  You get 50,000 free trace spans and 1,000 free evals each month. No credit card required.
-</Card>
+
 
 <Steps>
   <Step>
@@ -31,105 +31,54 @@ export JUDGMENT_ORG_ID="your_org_id_here"
     <Tabs items={['Python']}>
       <Tab value="Python">
         ```bash
-        pip install trajectory
+        pip install trajectoryeval
         ```
       </Tab>
     </Tabs>
 
-    You can follow our latest updates via [GitHub](https://github.com/judgmentlabs/judgeval)! If you enjoy using trajectory, consider giving us a star ⭐!
   </Step>
 
   <Step>
-    ## Start Tracing with trajectory
+    ## Start tracing with trajectory
 
-    Tracing starts with wrapping your LLM client with `wrap()` and observing your tools with `@judgment.observe`.
+    Below is a minimal example that instruments a small function and an LLM call. You’ll see both the function and the tool step show up as spans in your trace.
 
     ```py title="trace.py"
     from trajectory import Tracer, wrap
     from openai import OpenAI
 
-    client = wrap(OpenAI())  # tracks all LLM calls
-    judgment = Tracer(project_name="default_project")
+    # Wrap your OpenAI client so model calls are captured as spans
+    client = wrap(OpenAI())
 
-    @judgment.observe(span_type="tool")
-    def format_question(question: str) -> str:
-        # dummy tool
-        return f"Question : {question}"
+    # Initialize a tracer to group spans into a single trace
+    tracer = Tracer(project_name="default_project")
 
-    @judgment.observe(span_type="function")
-    def run_agent(prompt: str) -> str:
-        task = format_question(prompt)
-        response = client.chat_completions.create(
-            model="gpt-4.1",
-            messages=[{"role": "user", "content": task}]
+    # Mark helper utilities as tools
+    @tracer.observe(span_type="tool")
+    def format_currency(n: float) -> str:
+        return f"${n:,.2f}"
+
+    # Your application logic — captured as a function span
+    @tracer.observe(name="plan_trip", span_type="function")
+    def plan_trip(city: str) -> str:
+        prompt = f"Plan a 1-day itinerary for {city}. Budget: {format_currency(120)}."
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
         )
-        return response.choices[0].message.content
+        return resp.choices[0].message.content
 
-    run_agent("What is the capital of the United States?")
+    if __name__ == "__main__":
+        plan_trip("Lisbon")
     ```
 
-    <Callout type="info">Using LangGraph? Check out our [LangGraph quickstart](/documentation/tracing/integrations/langgraph) for more details.</Callout>
-
-    Congratulations! You've just created your first trace. It should look like this:
-
-    ![Image of a basic trace](/images/trace_ss.png)
-
-    <Callout type="tip">You can also run [online evals](/documentation/performance/online-evals) on production traces if you want to alert on specific events.</Callout>
-
-    To learn more about using `trajectory`'s tracing module, click [here](/documentation/tracing/introduction).
-  </Step>
-
-  <Step>
-    ## Start Testing with trajectory
-
-    trajectory enables you to use evals as unit tests in your CI pipelines.
-
-    <Callout type="info">
-      You can run evals on predefined test examples with any of the [built-in scorers](/documentation/evaluation/scorers/introduction) or your own [custom scorers](/documentation/evaluation/scorers/custom-scorers).
-      Evals produce a score for each example and you can run multiple scorers on the same examples.
-    </Callout>
-
-    ```py title="eval.py"
-    from trajectory import JudgmentClient
-    from trajectory.data import Example
-    from trajectory.scorers import FaithfulnessScorer
-
-    client = JudgmentClient()
-
-    task = "What is the capital of the United States?"
-    example = Example(
-        input=task,
-        actual_output=run_agent(task),  # e.g. "The capital of the U.S. is Washington, D.C."
-        retrieval_context=["Washington D.C. was founded in 1790 and became the capital of the U.S."],
-    )
-
-    scorer = FaithfulnessScorer(threshold=0.5)
-    client.assert_test(
-        examples=[example],
-        scorers=[scorer],
-        model="gpt-4.1",
-    )
-    ```
-
-    Your test should have passed! Let's break down what happened.
-
-    * `input` and `actual_output` represent what your agent system begins with and returns.
-    * `retrieval_context` represents the retrieved context from your knowledge sources.
-    * `FaithfulnessScorer(threshold=0.5)` checks if the output is hallucinated relative to the retrieved context.
-      Thresholds are used in the context of [unit testing](/documentation/evaluation/unit-testing).
-    * We chose `gpt-4.1` as our judge model to measure faithfulness. Judgment Labs offers ANY judge model for your evaluation needs.
-
-    <Callout type="tip">
-      If this test case failed (try changing it yourself!), an exception would be raised.
-    </Callout>
+    Congratulations! You've just created your first trace.
   </Step>
 </Steps>
 
 ## Next Steps
 
-Congratulations! You've just finished getting started with `trajectory` and the Judgment Platform.
-
-For a deeper dive into using `trajectory`, learn more about our offerings!
+We provide two things: tracing and evaluation. Explore each area below.
 
 <Columns cols={2}>
   <Card
@@ -147,5 +96,4 @@ For a deeper dive into using `trajectory`, learn more about our offerings!
   >
     Measure and optimize your agent along any quality metric, from hallucinations to tool-calling accuracy.
   </Card>
-
 </Columns>

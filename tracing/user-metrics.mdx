@@ -6,7 +6,12 @@ icon: "chart-line"
 
 # User Metrics
 
-Use `tracer.log_metric(...)` to record lightweight, structured telemetry on the current trace. Metrics are attached to the active span/trace and can be filtered by conversation or user.
+We support tracking user metrics to judge real-life performance of your AI agent. For a coding agent, 
+these metrics could include number of code change acceptances. You can record any custom metric, 
+that you want to track using the ```trace.log_metric()``` function. 
+
+These metrics will show up on the dashboard on each trace and an aggregation of it on the 
+main dashboard. 
 
 ## Log metrics
 
